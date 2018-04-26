@@ -2550,29 +2550,37 @@ struct DLib : public std::enable_shared_from_this<DLib> {
   void AddEnvironment(Environment* env) {
     if (users_.count(env) > 0) return;
     users_.insert(env);
-    struct cleanup_hook_data {
-      std::shared_ptr<DLib> info;
-      Environment* env;
-    };
-    env->AddCleanupHook([](void* arg) {
-      Mutex::ScopedLock lock(dlib_mutex);
-      cleanup_hook_data* cbdata = static_cast<cleanup_hook_data*>(arg);
-      std::shared_ptr<DLib> info = cbdata->info;
-      info->users_.erase(cbdata->env);
-      delete cbdata;
-      if (info->users_.empty()) {
-        std::vector<std::string> filenames;
 
-        for (const auto& entry : dlopen_cache) {
-          if (entry.second == info)
-            filenames.push_back(entry.first);
-        }
-        for (const std::string& filename : filenames)
-          dlopen_cache.erase(filename);
+    // Not adding the cleanup hook. Let OS clean up resources when process exits.
+    //
+    // This is because the we cannot control when the DLL is safe to unload.
+    // For example, the Isolate::TearDown may call into the DLL, if the DLL
+    // implements a class inherits V8::ExternalStringResource.
+    //
 
-        handle_to_dlib.erase(info->handle_);
-      }
-    }, static_cast<void*>(new cleanup_hook_data { shared_from_this(), env }));
+    // struct cleanup_hook_data {
+    //   std::shared_ptr<DLib> info;
+    //   Environment* env;
+    // };
+    // env->AddCleanupHook([](void* arg) {
+    //   Mutex::ScopedLock lock(dlib_mutex);
+    //   cleanup_hook_data* cbdata = static_cast<cleanup_hook_data*>(arg);
+    //   std::shared_ptr<DLib> info = cbdata->info;
+    //   info->users_.erase(cbdata->env);
+    //   delete cbdata;
+    //   if (info->users_.empty()) {
+    //     std::vector<std::string> filenames;
+
+    //     for (const auto& entry : dlopen_cache) {
+    //       if (entry.second == info)
+    //         filenames.push_back(entry.first);
+    //     }
+    //     for (const std::string& filename : filenames)
+    //       dlopen_cache.erase(filename);
+
+    //     handle_to_dlib.erase(info->handle_);
+    //   }
+    // }, static_cast<void*>(new cleanup_hook_data { shared_from_this(), env }));
   }
 };
 
